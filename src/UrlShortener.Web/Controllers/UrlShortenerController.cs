@@ -1,37 +1,33 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using UrlShortener.Web.Repositories;
+using UrlShortener.Web.Repositories.Constants;
 using UrlShortener.Web.Repositories.Models;
 
 namespace UrlShortener.Web.Controllers;
 
 [ApiController]
-[Route("api/")]
-public class UrlShortenerController : ControllerBase
+[Route("")]
+public class UrlShortenerController(UrlShortenerRepository repository) : ControllerBase
 {
-    private readonly UrlShortenerRepository _repository;
-
-    public UrlShortenerController(UrlShortenerRepository repository)
-    {
-        _repository = repository;
-    }
-
+    private const int MaxUrlLength = 2048;
+    
     [HttpPost("shorten")]
-    public async Task<ObjectResult> SaveUrl([FromBody] SaveUrlRequest saveUrlRequest)
+    public async Task<IActionResult> SaveUrl([FromBody] SaveUrlRequest saveUrlRequest)
     {
-        // Пояснить в README.md почему была выбрана данная база данных
-        // Реализовать репозиторий сокращателя ссылок
-        // Обработать корректно все виды ошибок в контроллере
-        // Рефакторинг
-
         try
         {
             if (!Uri.TryCreate(saveUrlRequest.Url, UriKind.Absolute, out _))
             {
-                return BadRequest("The specified URL is invalid.");
+                return BadRequest("URL is invalid.");
             }
 
-            var code = await _repository.GenerateUniqueCode();
+            if (saveUrlRequest.Url.Length > MaxUrlLength)
+            {
+                return BadRequest("URL length increased");
+            }
+            
+            var code = await repository.GenerateUniqueCode();
 
             var request = HttpContext.Request;
 
@@ -43,14 +39,14 @@ public class UrlShortenerController : ControllerBase
                 CreatedOnUtc = DateTime.UtcNow
             };
 
-            await _repository.SaveUrl(url);
+            await repository.SaveUrl(url);
 
             return Ok(url.ShortUrl);
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
-            return StatusCode((int)HttpStatusCode.InternalServerError, "");
+            return StatusCode((int)HttpStatusCode.InternalServerError, UrlShortenerConstants.CommonServerErrorText);
         }
     }
 
@@ -59,7 +55,7 @@ public class UrlShortenerController : ControllerBase
     {
         try
         {
-            var url = await _repository.GetUrl(code);
+            var url = await repository.GetUrl(code);
 
             if (url == null)
             {
@@ -71,7 +67,7 @@ public class UrlShortenerController : ControllerBase
         catch (Exception e)
         {
             Console.WriteLine(e);
-            return StatusCode((int)HttpStatusCode.InternalServerError, "");
+            return StatusCode((int)HttpStatusCode.InternalServerError, UrlShortenerConstants.CommonServerErrorText);
         }
     }
 }
